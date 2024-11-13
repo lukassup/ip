@@ -45,19 +45,36 @@ fn link_show() -> Result<(), nix::Error> {
         println!("{}: {}: <{}>", ifidx, ifname, flag_names);
         for ifaddr in ifaddrs {
             let address = ifaddr.address.unwrap();
-            let Some(AddressFamily::Link) = address.family() else {
-                continue;
-            };
-            if ifaddr.flags.contains(InterfaceFlags::IFF_LOOPBACK) {
-                println!("    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00");
-                continue;
+            match address.family() {
+                #[cfg(any(bsd, solarish))]
+                Some(AddressFamily::Link) => {
+                    if ifaddr.flags.contains(InterfaceFlags::IFF_LOOPBACK) {
+                        println!("    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00");
+                        continue;
+                    }
+                    let addr = address.as_link_addr().unwrap();
+                    if &addr.is_empty() {
+                        println!("    link/none");
+                        continue;
+                    }
+                    println!("    link/ether {addr} brd ff:ff:ff:ff:ff:ff");
+                }
+                #[cfg(target_os = "linux")]
+                Some(AddressFamily::Packet) => {
+                    let addr = address.as_link_addr().unwrap();
+                    if ifaddr.flags.contains(InterfaceFlags::IFF_LOOPBACK) {
+                        println!("    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00");
+                        continue;
+                    }
+                    if ifaddr.flags.contains(InterfaceFlags::IFF_POINTOPOINT) {
+                        println!("    link/none");
+                        continue;
+                    }
+                    println!("    link/ether {addr} brd ff:ff:ff:ff:ff:ff");
+                }
+                _ => {}
+
             }
-            let addr = address.as_link_addr().unwrap();
-            if addr.is_empty() {
-                println!("    link/none");
-                continue;
-            }
-            println!("    link/ether {addr} brd ff:ff:ff:ff:ff:ff");
         }
         println!();
     }
@@ -74,6 +91,7 @@ fn addr_show() -> Result<(), nix::Error> {
         for ifaddr in ifaddrs {
             let address = ifaddr.address.unwrap();
             match address.family() {
+                #[cfg(any(bsd, solarish))]
                 Some(AddressFamily::Link) => {
                     if ifaddr.flags.contains(InterfaceFlags::IFF_LOOPBACK) {
                         println!("    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00");
@@ -81,6 +99,19 @@ fn addr_show() -> Result<(), nix::Error> {
                     }
                     let addr = address.as_link_addr().unwrap();
                     if addr.is_empty() {
+                        println!("    link/none");
+                        continue;
+                    }
+                    println!("    link/ether {addr} brd ff:ff:ff:ff:ff:ff");
+                }
+                #[cfg(target_os = "linux")]
+                Some(AddressFamily::Packet) => {
+                    let addr = address.as_link_addr().unwrap();
+                    if ifaddr.flags.contains(InterfaceFlags::IFF_LOOPBACK) {
+                        println!("    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00");
+                        continue;
+                    }
+                    if ifaddr.flags.contains(InterfaceFlags::IFF_POINTOPOINT) {
                         println!("    link/none");
                         continue;
                     }
