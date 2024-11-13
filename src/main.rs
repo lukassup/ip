@@ -1,0 +1,145 @@
+mod cli;
+use cli::{Address, Link, IP};
+
+use clap::Parser;
+use indexmap::IndexMap;
+use nix::{
+    ifaddrs::{self, InterfaceAddress},
+    net::{self, if_::InterfaceFlags},
+    sys::socket::{AddressFamily, SockaddrLike},
+};
+
+type InterfaceMap = IndexMap<String, Vec<InterfaceAddress>>;
+
+/// Creates a Map of interface names and their InterfaceAddress configurations
+/// where each interface may have more than one InterfaceAdress configuration
+fn collect_interfaces() -> Result<InterfaceMap, nix::Error> {
+    let mut ifaddrs: InterfaceMap = InterfaceMap::new();
+    for ifaddr in ifaddrs::getifaddrs()? {
+        ifaddrs
+            .entry(ifaddr.interface_name.clone()) // copy
+            .and_modify(|e| {
+                e.push(ifaddr.clone()); // copy
+            })
+            .or_insert(vec![ifaddr.clone()]); // copy
+    }
+    Ok(ifaddrs)
+}
+
+// InterfaceFlags formatted in the style of iproute2
+fn flag_names(ifaddr: &InterfaceAddress) -> String {
+    ifaddr
+        .flags
+        .iter_names()
+        .map(|(name, _)| name.strip_prefix("IFF_").unwrap_or(name))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+// TODO: accept args
+fn link_show() -> Result<(), nix::Error> {
+    let ifaddrs = collect_interfaces()?;
+    for (ifname, ifaddrs) in ifaddrs.iter() {
+        let ifidx = net::if_::if_nametoindex(ifname.as_str())?;
+        let flag_names = flag_names(ifaddrs.first().unwrap());
+        println!("{}: {}: <{}>", ifidx, ifname, flag_names);
+        for ifaddr in ifaddrs {
+            let address = ifaddr.address.unwrap();
+            let Some(AddressFamily::Link) = address.family() else {
+                continue;
+            };
+            if ifaddr.flags.contains(InterfaceFlags::IFF_LOOPBACK) {
+                println!("    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00");
+                continue;
+            }
+            let addr = address.as_link_addr().unwrap();
+            if addr.is_empty() {
+                println!("    link/none");
+                continue;
+            }
+            println!("    link/ether {addr} brd ff:ff:ff:ff:ff:ff");
+        }
+        println!();
+    }
+    Ok(())
+}
+
+// TODO: accept args
+fn addr_show() -> Result<(), nix::Error> {
+    let ifaddrs = collect_interfaces()?;
+    for (ifname, ifaddrs) in ifaddrs.iter() {
+        let ifidx = net::if_::if_nametoindex(ifname.as_str())?;
+        let flag_names = flag_names(ifaddrs.first().unwrap());
+        println!("{}: {}: <{}>", ifidx, ifname, flag_names);
+        for ifaddr in ifaddrs {
+            let address = ifaddr.address.unwrap();
+            match address.family() {
+                Some(AddressFamily::Link) => {
+                    if ifaddr.flags.contains(InterfaceFlags::IFF_LOOPBACK) {
+                        println!("    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00");
+                        continue;
+                    }
+                    let addr = address.as_link_addr().unwrap();
+                    if addr.is_empty() {
+                        println!("    link/none");
+                        continue;
+                    }
+                    println!("    link/ether {addr} brd ff:ff:ff:ff:ff:ff");
+                }
+                Some(AddressFamily::Inet) => {
+                    let addr = address.as_sockaddr_in().unwrap().ip();
+                    let mask = ifaddr.netmask.unwrap().as_sockaddr_in().unwrap().ip();
+                    let prefix = u32::from(mask).leading_ones();
+                    match (ifaddr.broadcast, ifaddr.destination) {
+                        // eth
+                        (Some(bcast), None) => {
+                            let bcast = bcast.as_sockaddr_in().unwrap().ip();
+                            println!("    inet {addr}/{prefix} brd {bcast}");
+                        }
+                        // p2p
+                        (None, Some(peer)) => {
+                            let peer = peer.as_sockaddr_in().unwrap().ip();
+                            println!("    inet {addr} peer {peer}/{prefix}");
+                        }
+                        // loopback,etc
+                        _ => {
+                            println!("    inet {addr}/{prefix}");
+                        }
+                    };
+                }
+                Some(AddressFamily::Inet6) => {
+                    let addr = address.as_sockaddr_in6().unwrap().ip();
+                    let netmask = ifaddr.netmask.unwrap().as_sockaddr_in6().unwrap().ip();
+                    let prefix = u128::from(netmask).leading_ones();
+                    match (ifaddr.broadcast, ifaddr.destination) {
+                        // eth
+                        (Some(bcast), None) => {
+                            let bcast = bcast.as_sockaddr_in6().unwrap().ip();
+                            println!("    inet6 {addr}/{prefix} brd {bcast}");
+                        }
+                        // p2p
+                        (None, Some(peer)) => {
+                            let peer = peer.as_sockaddr_in6().unwrap().ip();
+                            println!("    inet6 {addr} peer {peer}/{prefix}");
+                        }
+                        // loopback,etc
+                        _ => {
+                            println!("    inet6 {addr}/{prefix}");
+                        }
+                    };
+                }
+                _ => {}
+            };
+        }
+        println!();
+    }
+    Ok(())
+}
+
+fn main() -> Result<(), nix::Error> {
+    match IP::parse() {
+        IP::Address(Address::Show) => addr_show(),
+        IP::Link(Link::Show) => link_show(),
+        _ => unimplemented!(),
+    }
+}
