@@ -35,7 +35,7 @@ cargo run -- address show
 
 2: enp5s0: <UP,BROADCAST,RUNNING,MULTICAST,LOWER_UP>
     link/ether aa:bb:cc:00:11:22 brd ff:ff:ff:ff:ff:ff
-    inet 192.168.1.1/24 brd 192.168.88.255
+    inet 192.168.1.1/24 brd 192.168.1.255
     inet6 fe80::1010:2020:3030:4040/64
 
 3: wlp6s0: <BROADCAST,MULTICAST>
