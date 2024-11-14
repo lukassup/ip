@@ -14,16 +14,14 @@ type InterfaceMap = IndexMap<String, Vec<InterfaceAddress>>;
 /// Creates a Map of interface names and their InterfaceAddress configurations
 /// where each interface may have more than one InterfaceAdress configuration
 fn collect_interfaces() -> Result<InterfaceMap, nix::Error> {
-    let mut ifaddrs: InterfaceMap = InterfaceMap::new();
-    for ifaddr in ifaddrs::getifaddrs()? {
-        ifaddrs
-            .entry(ifaddr.interface_name.clone()) // copy
-            .and_modify(|e| {
-                e.push(ifaddr.clone()); // copy
-            })
-            .or_insert(vec![ifaddr.clone()]); // copy
-    }
-    Ok(ifaddrs)
+    let mut ifaddr_map: InterfaceMap = InterfaceMap::new();
+    ifaddrs::getifaddrs()?.for_each(|ifaddr| {
+        ifaddr_map
+            .entry(ifaddr.interface_name.clone())
+            .or_default()
+            .push(ifaddr.clone());
+    });
+    Ok(ifaddr_map)
 }
 
 // InterfaceFlags formatted in the style of iproute2
