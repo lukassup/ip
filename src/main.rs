@@ -59,7 +59,7 @@ fn link_show() -> Result<(), nix::Error> {
                     }
                     println!("    link/ether {addr} brd ff:ff:ff:ff:ff:ff");
                 }
-                #[cfg(target_os = "linux")]
+                #[cfg(linux_android)]
                 Some(AddressFamily::Packet) => {
                     let addr = address.as_link_addr().unwrap();
                     if ifaddr.flags.contains(InterfaceFlags::IFF_LOOPBACK) {
@@ -104,7 +104,7 @@ fn addr_show() -> Result<(), nix::Error> {
                     }
                     println!("    link/ether {addr} brd ff:ff:ff:ff:ff:ff");
                 }
-                #[cfg(target_os = "linux")]
+                #[cfg(linux_android)]
                 Some(AddressFamily::Packet) => {
                     let addr = address.as_link_addr().unwrap();
                     if ifaddr.flags.contains(InterfaceFlags::IFF_LOOPBACK) {
