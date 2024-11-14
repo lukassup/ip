@@ -53,7 +53,7 @@ fn link_show() -> Result<(), nix::Error> {
                         continue;
                     }
                     let addr = address.as_link_addr().unwrap();
-                    if &addr.is_empty() {
+                    if addr.is_empty() {
                         println!("    link/none");
                         continue;
                     }
@@ -73,7 +73,6 @@ fn link_show() -> Result<(), nix::Error> {
                     println!("    link/ether {addr} brd ff:ff:ff:ff:ff:ff");
                 }
                 _ => {}
-
             }
         }
         println!();
