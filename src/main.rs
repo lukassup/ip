@@ -1,13 +1,16 @@
 mod cli;
-use cli::{Address, Link, IP};
+use cli::{Address, IP, Link};
 
 use clap::Parser;
 use indexmap::IndexMap;
 use nix::{
     ifaddrs::{self, InterfaceAddress},
-    net::{self, if_::InterfaceFlags},
+    net,
     sys::socket::{AddressFamily, SockaddrLike},
 };
+
+#[cfg(linux_android)]
+use nix::libc::{ARPHRD_ETHER, ARPHRD_LOOPBACK};
 
 type InterfaceMap = IndexMap<String, Vec<InterfaceAddress>>;
 
@@ -60,15 +63,18 @@ fn link_show() -> Result<(), nix::Error> {
                 #[cfg(linux_android)]
                 Some(AddressFamily::Packet) => {
                     let addr = address.as_link_addr().unwrap();
-                    if ifaddr.flags.contains(InterfaceFlags::IFF_LOOPBACK) {
-                        println!("    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00");
-                        continue;
+                    // https://github.com/torvalds/linux/blob/master/include/uapi/linux/if_arp.h
+                    match addr.hatype() {
+                        ARPHRD_LOOPBACK => {
+                            println!("    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00");
+                        }
+                        ARPHRD_ETHER => {
+                            println!("    link/ether {addr} brd ff:ff:ff:ff:ff:ff");
+                        },
+                        _ => {
+                            println!("    link/none");
+                        }
                     }
-                    if ifaddr.flags.contains(InterfaceFlags::IFF_POINTOPOINT) {
-                        println!("    link/none");
-                        continue;
-                    }
-                    println!("    link/ether {addr} brd ff:ff:ff:ff:ff:ff");
                 }
                 _ => {}
             }
@@ -104,15 +110,18 @@ fn addr_show() -> Result<(), nix::Error> {
                 #[cfg(linux_android)]
                 Some(AddressFamily::Packet) => {
                     let addr = address.as_link_addr().unwrap();
-                    if ifaddr.flags.contains(InterfaceFlags::IFF_LOOPBACK) {
-                        println!("    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00");
-                        continue;
+                    // https://github.com/torvalds/linux/blob/master/include/uapi/linux/if_arp.h
+                    match addr.hatype() {
+                        ARPHRD_LOOPBACK => {
+                            println!("    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00");
+                        }
+                        ARPHRD_ETHER => {
+                            println!("    link/ether {addr} brd ff:ff:ff:ff:ff:ff");
+                        },
+                        _ => {
+                            println!("    link/none");
+                        }
                     }
-                    if ifaddr.flags.contains(InterfaceFlags::IFF_POINTOPOINT) {
-                        println!("    link/none");
-                        continue;
-                    }
-                    println!("    link/ether {addr} brd ff:ff:ff:ff:ff:ff");
                 }
                 Some(AddressFamily::Inet) => {
                     let addr = address.as_sockaddr_in().unwrap().ip();
